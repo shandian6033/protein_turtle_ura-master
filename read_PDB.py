@@ -51,7 +51,7 @@ cursor = connect.cursor()
 
 def read_pdb(filename):
     """
-
+    For a pdb file from rcsb.org, store proteins' location information in database.
     :param filename: (str)
     :return: (list of list of str)
 
@@ -136,6 +136,14 @@ def rotate(angle):
 
 
 def draw_backbone(df, save_as=None):
+    """
+    Given a dataframe containing location information, draw 3d graph.
+    :param df: (pandas.DataFrame):
+        at least containing three columns: 'X', 'Y', 'Z'
+    :param save_as: (str):
+        where to save the plot. (note: if plt.show() should be removed if save_as is true)
+    :return: null
+    """
     fig.set_size_inches(10, 10)
     # ax = fig.add_subplot(111, projection='3d', aspect='equal')
     # ax.view_init(azim=120)
@@ -169,6 +177,13 @@ def draw_backbone(df, save_as=None):
 
 
 def calculate_distance(df):
+    """
+    calculate distance between two rows (each row represents a point in 3d space)
+    :param df: (pandas.DataFrame)
+        at least contain three columns: 'X', 'Y', 'Z'
+    :return: (pandas.DataFrame):
+        append a new column 'distance' to original df
+    """
     first = True
     df['distance'] = np.NaN
     for index, row in df.iterrows():
@@ -186,10 +201,10 @@ def calculate_distance(df):
 
 def vector_angle_vector(v1, v2):
     """
-
-    :param v1: tuple
-    :param v2: tuple
-    :return:
+    Given two vectors in 3d, calculate the angle bewteen them.
+    :param v1: (tuple): vector 1
+    :param v2: (tuple): vector 2
+    :return: (float)
     angle in radian
     0 <= angle <= 180
     """
@@ -200,11 +215,13 @@ def vector_angle_vector(v1, v2):
 
 def plane_angle_vector(plane_v1, plane_v2, v3):
     """
-    0 <= angle <= 90
-    :param plane_v1:
-    :param plane_v2:
-    :param v3:
-    :return:
+    calculate the angle between a plane and a vector
+    :param plane_v1:(tuple): vector 1 in plane 1
+    :param plane_v2:(tuple): vector 2 in plane 1
+    :param v3:(tuple): vector 3
+    :return:(float)
+        angle between plane 1 and vector 3
+        0 <= angle <= 90
     """
     perpendicular_vector = np.cross(plane_v1, plane_v2)
     return abs(90 - vector_angle_vector(perpendicular_vector, v3))
@@ -213,11 +230,13 @@ def plane_angle_vector(plane_v1, plane_v2, v3):
 def plane_angle_plane(p1_v1, p1_v2, p2_v1, p2_v2):
     """
     0 <= angle <= 90
-    :param p1_v1:
-    :param p1_v2:
-    :param p2_v1:
-    :param p2_v2:
+    :param p1_v1:(tuple): vector 1 in plane 1
+    :param p1_v2:(tuple): vector 2 in plane 1
+    :param p2_v1:(tuple): vector 1 in plane 2
+    :param p2_v2:(tuple): vector 2 in plane 2
     :return:
+        angle between plane 1 and plane 2
+        0 <= angle <= 90
     """
     p1_pvector = np.cross(p1_v1, p1_v2)  # perpendicular vector of plane 1
     p2_pvector = np.cross(p2_v1, p2_v2)  # perpendicular vector of plane 2
@@ -229,6 +248,13 @@ def plane_angle_plane(p1_v1, p1_v2, p2_v1, p2_v2):
 
 
 def calculate_angle(df):
+    """
+    Given a data frame containing atom coordinates of a protein, calculate the angle bewteen each bonds
+    :param df: (pandas.DataFrame):
+        having at least three columns: 'X', 'Y', 'Z'
+    :return: (pandas.DataFrame):
+        append a new columns 'radian' to original df
+    """
     length = len(df.index)
     angles = [np.NaN]
     for i in np.arange(1, length-1):
@@ -255,16 +281,16 @@ def is_constant(df, column, reference_atom):
     """
     based on the distance bewteen two atoms, see if they are constant.
     Args:
-        df:
-        column:
+        df (pandas.DataFrame):
+        column (str):
             which column to check. (one of following)
             'distance': check if the distance between 2 atoms are constant
             'radian': check if the angle at an atom is constant
-        reference_atom:
+        reference_atom (str):
             'CA': distance between CA and N OR the angle of N-CA-C
             'C': CA & C OR the angle of CA-C-N
             'N': C & N(for next atom) OR the angle of C-N-CA
-    :return:
+    :return: (dict)
     """
     df = df[df['element long'] == reference_atom]
     to_check = df[column]
@@ -279,10 +305,11 @@ def is_constant(df, column, reference_atom):
 def solve_functions(v1, v2, v3):
     """
     a * v1 + b * v2 + c * v1 dot v2 = v3
-    :param v1:
-    :param v2:
-    :param v3:
-    :return:
+    :param v1: (tuple): vector 1
+    :param v2: (tuple): vector 1
+    :param v3: (tuple): vector 1
+    :return: (tuple):
+        (a, b, c)
     """
     v12 = np.cross(v1, v2)
     d = np.array([
@@ -296,10 +323,10 @@ def solve_functions(v1, v2, v3):
 
 def structure_data(protein, chain):
     """
-    for one chain, calculate angles between AAs and store to db
-    :param pdb:
-    :param chain:
-    :return:
+    for one chain, calculate angles between bonds and store to db
+    :param protein: (str): name of protein
+    :param chain: (str): name of chain
+    :return: null
     """
     cursor.execute(
         """
@@ -446,6 +473,13 @@ def structure_data(protein, chain):
 
 
 def draw_chain(protein_id, chain, element='CA'):
+    """
+    For a chain in db, draw its 3d backbone plot.
+    :param protein_id: (str): name of protein
+    :param chain: (str): name of chain
+    :param element: (str):
+    :return: null
+    """
     cursor.execute(
         """
         SELECT X, Y, Z
@@ -471,6 +505,9 @@ def calculate_valid_parameters():
 
 
 def read_all_pdbs():
+    """
+    read all pdb files under PDB_LOCATION
+    """
     files = [f for f in os.listdir(PDB_LOCATION) if os.path.isfile(os.path.join(PDB_LOCATION, f))]
     for file in files:
         if file[-3:] == 'pdb':

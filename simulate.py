@@ -60,123 +60,11 @@ CA_C_N = 180 - 116.53
 C_N_CA = 180 - 121.23
 
 
-def structure_data(pdb, chain):
-    """
-    for one chain, calculate distances and angles
-    :param pdb:
-    :param chain:
-    :return:
-    """
-    critical_atom_df = read_pdb(pdb, elements=['N', 'CA', 'C'], chain=chain)
-    atom_amount = len(critical_atom_df.index)
-    assert atom_amount % 3 == 0, 'some aa does not have 3 critical atoms'
-    aa_amount = atom_amount / 3
-    distances = []  # amount of numbers = atom_amount - 1 (distance between two adjacent atom)
-    vv_angles = []  # amount of numbers = atom_amount - 2 (angle for each atom)
-    pv_angles = []  # amount of numbers = aa_amount - 1
-    pp_angles = []  # amount of numbers = aa_amount - 1
-    last_x = critical_atom_df.iloc[0].at['X']
-    last_y = critical_atom_df.iloc[0].at['Y']
-    last_z = critical_atom_df.iloc[0].at['Z']
-    for i in np.arange(0, atom_amount):
-        cur_row = critical_atom_df.iloc[i]
-        #  calculate distance
-        if i == 0:
-            distance = np.NaN
-        else:
-            distance = math.sqrt((cur_row['X'] - last_x) ** 2 + (cur_row['Y'] - last_y)**2 + (cur_row['Z'] - last_z)**2)
-        #  calculate vv_angle
-        if i == 0 or i == atom_amount - 1:
-            vv_angle = np.NaN
-        else:
-            last_row = critical_atom_df.iloc[i-1]
-            next_row = critical_atom_df.iloc[i+1]
-            vector1 = (
-                cur_row['X'] - last_row['X'],
-                cur_row['Y'] - last_row['Y'],
-                cur_row['Z'] - last_row['Z']
-            )
-            vector2 = (
-                next_row['X'] - cur_row['X'],
-                next_row['Y'] - cur_row['Y'],
-                next_row['Z'] - cur_row['Z']
-            )
-            vv_angle = vector_angle_vector(vector1, vector2)
-        #  calculate pv_angle between AAs:
-        if cur_row.at['AA sequence'] > 1 and cur_row.at['element long'] == 'N':
-            last_aa_v1 = (
-                critical_atom_df.iloc[i - 2].at['X'] - critical_atom_df.iloc[i - 3].at['X'],
-                critical_atom_df.iloc[i - 2].at['Y'] - critical_atom_df.iloc[i - 3].at['Y'],
-                critical_atom_df.iloc[i - 2].at['Z'] - critical_atom_df.iloc[i - 3].at['Z']
-            )
-            last_aa_v2 = (
-                critical_atom_df.iloc[i - 1].at['X'] - critical_atom_df.iloc[i - 2].at['X'],
-                critical_atom_df.iloc[i - 1].at['Y'] - critical_atom_df.iloc[i - 2].at['Y'],
-                critical_atom_df.iloc[i - 1].at['Z'] - critical_atom_df.iloc[i - 2].at['Z']
-            )
-            vector3 = (
-                critical_atom_df.iloc[i].at['X'] - critical_atom_df.iloc[i - 1].at['X'],
-                critical_atom_df.iloc[i].at['Y'] - critical_atom_df.iloc[i - 1].at['Y'],
-                critical_atom_df.iloc[i].at['Z'] - critical_atom_df.iloc[i - 1].at['Z']
-            )
-            pv_angle = plane_angle_vector(last_aa_v1, last_aa_v2, vector3)
-        else:
-            pv_angle = np.NaN
-        #  calculate pp_angle between AAs:
-        if cur_row.at['AA sequence'] > 1 and cur_row.at['element long'] == 'C':
-            last_aa_v1 = (
-                critical_atom_df.iloc[i - 4].at['X'] - critical_atom_df.iloc[i - 5].at['X'],
-                critical_atom_df.iloc[i - 4].at['Y'] - critical_atom_df.iloc[i - 5].at['Y'],
-                critical_atom_df.iloc[i - 4].at['Z'] - critical_atom_df.iloc[i - 5].at['Z']
-            )
-            last_aa_v2 = (
-                critical_atom_df.iloc[i - 3].at['X'] - critical_atom_df.iloc[i - 4].at['X'],
-                critical_atom_df.iloc[i - 3].at['Y'] - critical_atom_df.iloc[i - 4].at['Y'],
-                critical_atom_df.iloc[i - 3].at['Z'] - critical_atom_df.iloc[i - 4].at['Z']
-            )
-            cur_aa_v1 = (
-                critical_atom_df.iloc[i - 1].at['X'] - critical_atom_df.iloc[i - 2].at['X'],
-                critical_atom_df.iloc[i - 1].at['Y'] - critical_atom_df.iloc[i - 2].at['Y'],
-                critical_atom_df.iloc[i - 1].at['Z'] - critical_atom_df.iloc[i - 2].at['Z']
-            )
-            cur_aa_v2 = (
-                critical_atom_df.iloc[i].at['X'] - critical_atom_df.iloc[i - 1].at['X'],
-                critical_atom_df.iloc[i].at['Y'] - critical_atom_df.iloc[i - 1].at['Y'],
-                critical_atom_df.iloc[i].at['Z'] - critical_atom_df.iloc[i - 1].at['Z']
-            )
-            pp_angle = plane_angle_plane(last_aa_v1, last_aa_v2, cur_aa_v1, cur_aa_v2)
-        else:
-            pp_angle = np.NaN
-
-        distances.append(distance)
-        vv_angles.append(vv_angle)
-        pv_angles.append(pv_angle)
-        pp_angles.append(pp_angle)
-        last_x = cur_row.at['X']
-        last_y = cur_row.at['Y']
-        last_z = cur_row.at['Z']
-    critical_atom_df['distance'] = distances
-    critical_atom_df['atom angle'] = vv_angles
-    critical_atom_df['CN bond angle'] = pv_angles
-    critical_atom_df['AA angle'] = pp_angles
-    return critical_atom_df
-
-
-def read_db():
-    cursor.execute(
-        """
-        select first_aa_name, second_aa_name, avg(CN_a) as CN_a, avg(CN_b) as CN_b, 
-        avg(CN_c) as CN_c,  avg(NCA_a) as NCA_a, avg(NCA_b) as NCA_b, avg(NCA_c) as NCA_c, 
-        avg(CAC_a) as CAC_a, avg(CAC_b) as CAC_b, avg(CAC_c) as CAC_c from two_adjacent_AAs
-        group by first_aa_name, second_aa_name
-        """
-    )
-    results = cursor.fetchall()
-    with open('parameter.txt', 'w') as outfile:
-        json.dump(outfile, results)
-
-
 def calculate_parameters():
+    """
+    retrieve parameters (i.e. CN_a,CN_b ...) for simulation and store to parameter.json.
+    This function is to group parameters by adjacent AAs ignoring order. (i.e. GLU LYS is same as LYS GLU)
+    """
     cursor.execute(
         """
         SELECT DISTINCT first_aa_name, second_aa_name 
@@ -225,6 +113,12 @@ def calculate_parameters():
 
 
 def generate_coordinates(aas):
+    """
+    With parameters, generate simulated protein structure.
+    :param aas: (str): the aa sequence of a protein chain
+    :return: (pandas.DataFrame):
+        a data frame containing simulated protein structure
+    """
     df = pd.DataFrame(
         [[1, 'N', 1, 0, 0, 0],
         [2, 'CA', 1, N_CA, 0, 0],
@@ -296,40 +190,19 @@ def generate_coordinates(aas):
     return df
 
 
-def rough_simulating(aas, x=0, y=0, z=0):
-    df = pd.DataFrame(
-        [1, x, y, z],
-        columns=['AA sequence', 'X', 'Y', 'Z']
-    )  # default start is N at (x, y, z)
-    length = len(aas)
-    for i in np.arange(0, length - 1):
-        last_x = df.iloc[-1].at['X']
-        last_y = df.iloc[-1].at['Y']
-        last_z = df.iloc[-1].at['Z']
-        if aas[i] in POSITIVE and aas[i+1] in POSITIVE:
-            delta_x = -2.197  # 1AO6 10 - 9
-            delta_y = -2.24
-            delta_z = -2.066
-        elif aas[i] in POSITIVE and aas[i+1] in NEGATIVE:
-            delta_x = -3.344  # 1AO6 13 - 12
-            delta_y = -1.251
-            delta_z = -1.391
-        elif aas[i] in NEGATIVE and aas[i + 1] in POSITIVE:
-            delta_x = 3.344  # 1AO6 13 - 12
-            delta_y = 1.251
-            delta_z = 1.391
-        elif aas[i] in NEGATIVE and aas[i+1] in NEGATIVE:
-            delta_x = -3.344  # 1AO6 17 - 16
-            delta_y = -1.251
-            delta_z = -1.391
-
-        new_row = {
-            'AA sequence': i + 2,
-            'X': last_x + delta_x
-        }
-
-
 def simulate(filepath, element='CA', save_as=None):
+    """
+    given a protein chain, simulate its 3d structure
+    :param filepath: (str):
+        path of a fasta file containing aa sequence.
+        The aa sequence should not be longer than one line.
+    :param element: (str):
+        one of following: 'CA', 'C', 'N'
+        which atom in aa is used to draw
+    :param save_as: (str):
+        refer to draw_backbone()
+    :return: null
+    """
     fasta = open(filepath, 'r')
     fasta.readline()
     for line in fasta:
@@ -340,6 +213,5 @@ def simulate(filepath, element='CA', save_as=None):
     draw_backbone(atoms_df, save_as)
 
 
-# calculate_parameters()
 simulate('E:\Research\protein_turtle_ura-master\samples\\KAMP\\5KI0_A.fasta.txt',
          save_as='E:\Research\protein_turtle_ura-master\GIFs\\5KI0_A_Jul4.gif')

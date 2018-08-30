@@ -1,3 +1,6 @@
+"""
+This file is used to create a database in the beginning. This file should be run only once.
+"""
 import sqlite3
 
 DB_FILE = 'E:\Research\protein_turtle_ura-master\protein.db'
